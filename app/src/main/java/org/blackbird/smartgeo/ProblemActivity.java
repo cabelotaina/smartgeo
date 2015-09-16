@@ -3,7 +3,6 @@ package org.blackbird.smartgeo;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -22,7 +21,6 @@ import android.content.Context;
 import android.location.Address;
 import android.location.Geocoder;
 
-import java.io.IOException;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -56,27 +54,29 @@ public class ProblemActivity extends Activity {
         Double latitude = location.getLatitude();
 
         Geocoder geocoder;
-        List<Address> addresses = null;
+        List<Address> addresses;
         geocoder = new Geocoder(this, Locale.getDefault());
-
 
         try {
             addresses = geocoder.getFromLocation(latitude, longitude, 1); // Here 1 represent max location result to returned, by documents it recommended 1 to 5
 
+            if(addresses == null) {
+                Log.e("SMARTGEO", "GPS is false because address is null");
+            } else {
+                String address =  addresses.get(0).getAddressLine(0); // If any additional address line present than only, check with max available address lines by getMaxAddressLineIndex()
+                String city =  addresses.get(0).getLocality();
+
+
+                latitude_text = (TextView) findViewById(R.id.address);
+
+                latitude_text.setText(address+", "+city);
+            }
         }
         catch (Exception e){
             Log.e("SMARTGEO", "exception: " + e.getMessage());
         }
 
-        String address = addresses.get(0).getAddressLine(0); // If any additional address line present than only, check with max available address lines by getMaxAddressLineIndex()
-        String city = addresses.get(0).getLocality();
 
-
-        latitude_text = (TextView) findViewById(R.id.text_latitude);
-        longitude_text = (TextView) findViewById(R.id.text_longitude);
-
-        latitude_text.setText(address+city);
-        longitude_text.setText(longitude.toString());
     }
 
     @Override
@@ -153,7 +153,7 @@ public class ProblemActivity extends Activity {
         // Ensure that there's a camera activity to handle the intent
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
             // Create the File where the photo should go
-            File image = null;
+            File image;
             Uri image_path = null;
             try {
                 image = getOutputPhotoFile();
