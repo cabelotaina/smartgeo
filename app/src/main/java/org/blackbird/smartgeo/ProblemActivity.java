@@ -26,20 +26,20 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.List;
+import java.io.IOException;
 
 
 public class ProblemActivity extends Activity {
 
     public final static String EXTRA_TITLE = "org.blackbird.smartgeo.TITLE";
     public final static String EXTRA_DESCRIPTION = "org.blackbird.smartgeo.DESCRIPTION";
-    public final static String EXTRA_PICTURE = "org.blackbird.smartgeo.PICTURE";
-    private static final int REQUEST_IMAGE_CAPTURE = 1;
-    private static final int RESULT_OK = 1;
+
+    private final int PICK_IMAGE_REQUEST = 1;
+    private static final int REQUEST_TAKE_PHOTO = 2;
+
     private static final String TAG = "SMARTGEO";
 
-    private TextView latitude_text;
-    private TextView longitude_text;
-
+    private TextView address_aux;
     private ImageView picture_one = null;
 
     @Override
@@ -48,7 +48,7 @@ public class ProblemActivity extends Activity {
 
         setContentView(R.layout.activity_problem);
 
-        LocationManager lm = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
+        LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
         Double longitude = location.getLongitude();
         Double latitude = location.getLatitude();
@@ -60,19 +60,15 @@ public class ProblemActivity extends Activity {
         try {
             addresses = geocoder.getFromLocation(latitude, longitude, 1); // Here 1 represent max location result to returned, by documents it recommended 1 to 5
 
-            if(addresses == null) {
-                Log.e("SMARTGEO", "GPS is false because address is null");
+            if (addresses == null) {
+                Log.w("SMARTGEO", "GPS is false because address is null");
             } else {
-                String address =  addresses.get(0).getAddressLine(0); // If any additional address line present than only, check with max available address lines by getMaxAddressLineIndex()
-                String city =  addresses.get(0).getLocality();
-
-
-                latitude_text = (TextView) findViewById(R.id.address);
-
-                latitude_text.setText(address+", "+city);
+                String address = addresses.get(0).getAddressLine(0); // If any additional address line present than only, check with max available address lines by getMaxAddressLineIndex()
+                String city = addresses.get(0).getLocality();
+                address_aux = (TextView) findViewById(R.id.address);
+                address_aux.setText(address + ", " + city);
             }
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             Log.e("SMARTGEO", "exception: " + e.getMessage());
         }
 
@@ -97,8 +93,6 @@ public class ProblemActivity extends Activity {
         if (id == R.id.action_settings) {
             return true;
         }
-        // tentativa de colocar uma mensagem de depuração no log
-        //Log.w("Smartgeo", "Testando o sistema de log");
 
         return super.onOptionsItemSelected(item);
     }
@@ -115,10 +109,40 @@ public class ProblemActivity extends Activity {
     }
 
     public void addImage(View view) {
-        // colocar o codigo para adicionar imagens da galeria
-
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        //Intent intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        intent.setType("image/*");
+        intent.putExtra("return-data", true); //added snippet
+        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivityForResult(intent, PICK_IMAGE_REQUEST);
     }
 
+
+    public void loadCamera(View view) {
+        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        // Ensure that there's a camera activity to handle the intent
+        if (intent.resolveActivity(getPackageManager()) != null) {
+            // Create the File where the photo should go
+            File image;
+            Uri image_path = null;
+            try {
+                image = getOutputPhotoFile();
+                image_path = Uri.fromFile(image);
+            } catch (Exception ex) {
+                Log.e("SMARTGEO", "exception: " + ex.getMessage());
+                Log.e("SMARTGEO", "exception: " + ex.toString());
+                ex.printStackTrace();
+            }
+            // Continue only if the File was successfully created
+            Toast.makeText(this, "Image saved to:\n" +
+                    image_path, Toast.LENGTH_LONG).show();
+            if (image_path != null) {
+                intent.putExtra(MediaStore.EXTRA_OUTPUT, image_path);
+                intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivityForResult(intent, REQUEST_TAKE_PHOTO);
+            }
+        }
+    }
 
     private File getOutputPhotoFile() {
         File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), getPackageName());
@@ -138,37 +162,32 @@ public class ProblemActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 
-        //if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK)
+        super.onActivityResult(requestCode, resultCode, data);
+        Toast.makeText(this, "resultCode: " + resultCode, Toast.LENGTH_LONG).show();
+        //if (resultCode == RESULT_OK){
         picture_one = (ImageView) findViewById(R.id.picture_one);
-        Bitmap bp = (Bitmap) data.getExtras().get("data");
-        picture_one.setImageBitmap(bp);
-        // }
 
-    }
+        if (requestCode == REQUEST_TAKE_PHOTO && data != null && data.getData() != null) {
+            Bitmap bp = (Bitmap) data.getExtras().get("data");
+            picture_one.setImageBitmap(bp);
+        }
 
-    private static final int REQUEST_TAKE_PHOTO = 1;
+        if (requestCode == PICK_IMAGE_REQUEST && data != null && data.getData() != null) {
 
-    public void loadCamera(View view) {
-        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        // Ensure that there's a camera activity to handle the intent
-        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            // Create the File where the photo should go
-            File image;
-            Uri image_path = null;
+            Uri uri = data.getData();
             try {
-                image = getOutputPhotoFile();
-                image_path = Uri.fromFile(image);
-            } catch (Exception ex) {
+                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
+                picture_one.setImageBitmap(bitmap);
+            } catch (IOException ex) {
                 Log.e("SMARTGEO", "exception: " + ex.getMessage());
                 Log.e("SMARTGEO", "exception: " + ex.toString());
-            }
-            // Continue only if the File was successfully created
-            Toast.makeText(this, "Image saved to:\n" +
-                    image_path, Toast.LENGTH_LONG).show();
-            if (image_path != null) {
-                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, image_path.toString());
-                startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
+                ex.printStackTrace();
             }
         }
+        //}
+
+
     }
+
+
 }
