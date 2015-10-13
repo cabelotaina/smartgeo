@@ -1,46 +1,55 @@
 package org.blackbird.smartgeo;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.location.Address;
+import android.location.Geocoder;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
-import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.location.LocationManager;
-import android.location.Location;
-import android.content.Context;
-import android.location.Address;
-import android.location.Geocoder;
+
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.DefaultHttpClient;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Locale;
 import java.util.List;
-import java.io.IOException;
+import java.util.Locale;
 
 
 public class ProblemActivity extends Activity {
 
-    public final static String EXTRA_TITLE = "org.blackbird.smartgeo.TITLE";
-    public final static String EXTRA_DESCRIPTION = "org.blackbird.smartgeo.DESCRIPTION";
-
-    private final int PICK_IMAGE_REQUEST = 1;
-    private static final int REQUEST_TAKE_PHOTO = 2;
+    private final int PICK_IMAGE_REQUEST = 100;
+    private static final int REQUEST_TAKE_PHOTO = 200;
 
     private static final String TAG = "SMARTGEO";
 
     private TextView address_aux;
-    private ImageView picture_one = null;
+    private ImageView picture_one;
+    Double latitude, longitude;
+    Uri picture_uri;
+
+
+    String newSelectedImageURL;
+    String capturedImageURL;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,8 +59,8 @@ public class ProblemActivity extends Activity {
 
         LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        Double longitude = location.getLongitude();
-        Double latitude = location.getLatitude();
+        longitude = location.getLongitude();
+        latitude = location.getLatitude();
 
         Geocoder geocoder;
         List<Address> addresses;
@@ -98,50 +107,87 @@ public class ProblemActivity extends Activity {
     }
 
     public void sendMessage(View view) {
-        Intent intent = new Intent(this, DisplayMessageActivity.class);
-        EditText editTitle = (EditText) findViewById(R.id.edit_title);
-        String title = editTitle.getText().toString();
+
         EditText editDescription = (EditText) findViewById(R.id.edit_description);
         String description = editDescription.getText().toString();
-        intent.putExtra(EXTRA_TITLE, title);
-        intent.putExtra(EXTRA_DESCRIPTION, description);
-        startActivity(intent);
+        //Toast.makeText(this, "path: " + capturedImageURL, Toast.LENGTH_LONG).show();
+        Content content = new Content();
+        if (capturedImageURL != null){
+            content.setPicture(capturedImageURL);
+        }
+        content.setDescription(description);
+        content.setLabel(capturedImageURL);
+        content.setLatLon(latitude, longitude);
+        content.setUserId(1);
+        content.setTagList("teste");
+
+
+        makeRequest("http://10.0.0.4:3000/contents.json", content.json() );
+        Intent i = new Intent(getApplicationContext(), MainActivity.class);
+        startActivity(i);
     }
+
+    public static void makeRequest(String uri, String json) {
+        class OneShotTask implements Runnable {
+            String _uri;
+            String _json;
+            OneShotTask(String uri, String json) { _uri = uri; _json = json;}
+            public void run() {
+                someFunc(_uri,_json);
+            }
+            public void someFunc(String _uri,String _json){
+                try {
+                    HttpPost httpPost = new HttpPost(_uri);
+                    httpPost.setEntity(new StringEntity(_json));
+                    httpPost.setHeader("Accept", "application/json");
+                    httpPost.setHeader("Content-type", "application/json");
+                    new DefaultHttpClient().execute(httpPost);
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                } catch (ClientProtocolException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        Thread t = new Thread(new OneShotTask(uri,json));
+        t.start();
+    }
+
 
     public void addImage(View view) {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         //Intent intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
         intent.setType("image/*");
-        intent.putExtra("return-data", true); //added snippet
-        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivityForResult(intent, PICK_IMAGE_REQUEST);
     }
 
 
     public void loadCamera(View view) {
-        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        // Ensure that there's a camera activity to handle the intent
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            // Create the File where the photo should go
-            File image;
-            Uri image_path = null;
-            try {
-                image = getOutputPhotoFile();
-                image_path = Uri.fromFile(image);
-            } catch (Exception ex) {
-                Log.e("SMARTGEO", "exception: " + ex.getMessage());
-                Log.e("SMARTGEO", "exception: " + ex.toString());
-                ex.printStackTrace();
-            }
-            // Continue only if the File was successfully created
-            Toast.makeText(this, "Image saved to:\n" +
-                    image_path, Toast.LENGTH_LONG).show();
-            if (image_path != null) {
-                intent.putExtra(MediaStore.EXTRA_OUTPUT, image_path);
-                intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                startActivityForResult(intent, REQUEST_TAKE_PHOTO);
-            }
-        }
+//        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+//        if (intent.resolveActivity(getPackageManager()) != null) {
+//            startActivityForResult(intent, REQUEST_TAKE_PHOTO);
+//        }
+
+
+        Intent cameraIntent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+
+        newSelectedImageURL=null;
+        //outfile where we are thinking of saving it
+        Date date = new Date();
+        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss");
+
+        String newPicFile = "stay_alert"+ df.format(date) + ".png";
+
+
+        String outPath =Environment.getExternalStorageDirectory() + "/myFolderName/"+ newPicFile ;
+        File outFile = new File(outPath);
+
+        capturedImageURL=outFile.toString();
+        Uri outuri = Uri.fromFile(outFile);
+        cameraIntent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, outuri);
+        startActivityForResult(cameraIntent, REQUEST_TAKE_PHOTO);
     }
 
     private File getOutputPhotoFile() {
@@ -163,20 +209,58 @@ public class ProblemActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 
         super.onActivityResult(requestCode, resultCode, data);
-        Toast.makeText(this, "resultCode: " + resultCode, Toast.LENGTH_LONG).show();
+
         //if (resultCode == RESULT_OK){
-        picture_one = (ImageView) findViewById(R.id.picture_one);
+       /* picture_one = (ImageView) findViewById(R.id.picture_one);
 
         if (requestCode == REQUEST_TAKE_PHOTO && data != null && data.getData() != null) {
-            Bitmap bp = (Bitmap) data.getExtras().get("data");
-            picture_one.setImageBitmap(bp);
+            picture_uri = data.getData();
+            Toast.makeText(this, "resultCode: " + picture_uri, Toast.LENGTH_LONG).show();
+            Bundle extras = data.getExtras();
+            Bitmap imageBitmap = (Bitmap) extras.get("data");
+            picture_one.setImageBitmap(imageBitmap);
+        }
+*/
+
+        picture_one = (ImageView) findViewById(R.id.picture_one);
+        if (requestCode == REQUEST_TAKE_PHOTO) {
+            if (resultCode == RESULT_OK) {
+                Uri uri = null;
+
+                if (data != null) {
+                    uri = data.getData();
+                }
+                if (uri == null && capturedImageURL != null) {
+                    uri = Uri.fromFile(new File(capturedImageURL));
+                }
+                File file = new File(capturedImageURL);
+                if (!file.exists()) {
+                    if (file.mkdir()){
+                        sendBroadcast(new Intent(Intent.ACTION_MEDIA_MOUNTED,
+                                Uri.parse("file://" + Environment.getExternalStorageDirectory())));
+                    }
+
+                }
+
+                try {
+                    Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
+                    picture_one.setImageBitmap(bitmap);
+                } catch (IOException ex) {
+                    Log.e(TAG, "exception: " + ex.getMessage());
+                    Log.e(TAG, "exception: " + ex.toString());
+                    ex.printStackTrace();
+                }
+            }
+
+
+
+
         }
 
         if (requestCode == PICK_IMAGE_REQUEST && data != null && data.getData() != null) {
-
-            Uri uri = data.getData();
+            picture_uri = data.getData();
             try {
-                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
+                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), picture_uri);
                 picture_one.setImageBitmap(bitmap);
             } catch (IOException ex) {
                 Log.e("SMARTGEO", "exception: " + ex.getMessage());
@@ -184,10 +268,10 @@ public class ProblemActivity extends Activity {
                 ex.printStackTrace();
             }
         }
-        //}
-
-
     }
+
+
+
 
 
 }

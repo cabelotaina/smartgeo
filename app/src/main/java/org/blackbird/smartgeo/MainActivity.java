@@ -57,15 +57,7 @@ public class MainActivity extends Activity {
         startActivity(i);
     }
 
-    public void startIssueActivity(View view){
-        Intent i = new Intent(MainActivity.this, IssueActivity.class);
-        startActivity(i);
-    }
-
     public void loadCamera(View view){
-
-        // Se não tem um telefone cadastrado então o cara não pode usar o app enviar ele para o cagr para colocar o telefone correto
-        // se ele tem o telefone abrir a camera para ele tirar foto do problema?
 
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         File image = getOutputPhotoFile();

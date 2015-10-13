@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
         android:allowBackup="true"
@@ -27,14 +28,6 @@
             android:name=".ProblemActivity"
             android:label="@string/title_activity_problem"
             android:launchMode="singleTop">
-        </activity>
-        <activity
-            android:name=".IssueActivity"
-            android:label="@string/title_activity_issue" >
-        </activity>
-        <activity
-            android:name=".DisplayMessageActivity"
-            android:label="@string/title_activity_display_message" >
         </activity>
 
     </application>
